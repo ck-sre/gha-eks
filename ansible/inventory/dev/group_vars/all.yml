@@ -1,0 +1,7 @@
+---
+repository_name: dev/test-app-repo
+env: dev
+app_name: task-app
+tag: ["1.1"]
+aws_account_id: 553254185663
+app_region: "eu-west-1"
