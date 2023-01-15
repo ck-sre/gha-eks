@@ -36,3 +36,19 @@ jobs:
       uses: aws-actions/amazon-ecr-login@v1
       with:
         region: eu-west-1
+    
+    - name: Run playbook for dev
+      uses: dawidd6/action-ansible-playbook@v2
+      with:
+        # Required, playbook filepath
+        playbook: site.yml
+        # Optional, directory where playbooks live
+        directory: ./ansible
+        # Optional, additional flags to pass to ansible-playbook
+        options: |
+          --inventory inventory/dev
+          --verbose
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
