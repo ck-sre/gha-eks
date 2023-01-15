@@ -1,10 +1,10 @@
 ---
 
-# - name: Log into ECR
-#   shell: "$(aws ecr get-login-password --region {{ aws_region }} | docker login --username AWS --password-stdin {{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com )"
+- name: Log into ECR
+  shell: "$(aws ecr get-login-password --region {{ aws_region }} | docker login --username AWS  {{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com ) --password-stdin" 
 
-# - name: Create ecr repo
-#   command: aws ecr create-repository --repository-name {{ repository_name}} --image-tag-mutability IMMUTABLE
+- name: Create ecr repo
+  command: aws ecr create-repository --repository-name {{ repository_name}} --image-tag-mutability IMMUTABLE
 
 - name: ecr docker get-authorization-token
   shell: "aws ecr get-authorization-token --region {{ app_region }}"
@@ -30,6 +30,6 @@
     state: present
 
 
-- name: Create ecr repo
-  community.aws.ecs_ecr:
-    name: "{{ repository_name }}"
+# - name: Create ecr repo
+#   community.aws.ecs_ecr:
+#     name: "{{ repository_name }}"
