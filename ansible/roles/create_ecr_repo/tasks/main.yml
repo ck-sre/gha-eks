@@ -6,13 +6,6 @@
 # - name: Create ecr repo
 #   command: aws ecr create-repository --repository-name {{ repository_name}} --image-tag-mutability IMMUTABLE
 
-- name: Create image repo
-  ecs_ecr:
-    name:  "hello-from-the-other-side-{{ repository_name }}"
-    region:  "{{ aws_region }}"
-    state: present
-
-
 - name: ecr docker get-authorization-token
   shell: "aws ecr get-authorization-token --region {{ app_region }}"
   register: ecr_command
@@ -29,6 +22,12 @@
     reauthorize: yes
   when: ecr_credentials is defined
 
+
+- name: Create image repo
+  ecs_ecr:
+    name:  "hello-from-the-other-side-{{ repository_name }}"
+    region:  "{{ aws_region }}"
+    state: present
 
 
 - name: Create ecr repo
