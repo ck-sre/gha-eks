@@ -1,0 +1,29 @@
+---
+- hosts: localhost
+  connection: local
+  gather_facts: false
+
+  vars:
+    ecr_image_src_dir: ../
+    ecr_image_name: "{{ repository_name }}"
+    ecr_image_tags: ["{{ image_tag }}"]
+    ecr_account_id: "{{ aws_account_id }}"
+    pip_install_packages: ['docker']
+    ecr_region: "{{ aws_region }}"
+    ecr_login_required: false
+
+
+  roles:
+    - role: common
+      tags: [common]
+    - role: create_ecr_repo
+      tags: [repo]
+    - role: container_build_push
+      tags: [push]
+    - role: vpc
+      tags: [vpc]
+    - role: rds
+      tags: [rds]
+    - role: ecs_fargate
+      tags: [ecs_fargate]
+    

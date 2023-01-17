@@ -1,0 +1,199 @@
+---
+# tasks file for ecs
+
+    - name: Setup ECS cluster
+      ecs_cluster:
+        name: "{{ env }}-task-app-cluster"
+        state: present
+        region: "{{ aws_region }}"
+
+    - name: Create a role
+      iam_role:
+        name: "{{ env }}-fargate-ecs-role"
+        assume_role_policy_document: "{{ lookup('file','./files/role.json') }}"
+        description: Allows ECS tasks to call AWS services on our behalf.
+        tags:
+          Environment: "{{ env }}"
+          Name: "{{ env }}-task-app-iam-policy"
+      register: ecs_role
+
+    - name: Create a policy
+      iam_policy:
+        iam_type: role
+        iam_name: "{{ env }}-fargate-ecs-role"
+        policy_name: "{{ env }}-fargate-ecs-policy"
+        policy_json: " {{ lookup( 'file', './files/policy.json') }} "
+        region: "{{ aws_region }}"
+        state: present
+
+    - name: Create a log group for the logs
+      cloudwatchlogs_log_group:
+        retention: 30
+        region: "{{ aws_region }}"
+        state: present
+        log_group_name: "{{ env }}-task-app-log-group"
+        tags:
+          Environment: "{{ env }}"
+          Name: "{{ env }}-task-app-log-group"
+
+
+    - name: Web security group
+      amazon.aws.ec2_security_group:
+        name: "{{ env }}-web-security-group"
+        description: Security group for fargate
+        vpc_id: "{{ vpc_id }}"
+        region: "{{ aws_region }}"
+        rules:
+          - proto: tcp
+            ports: [80,443]
+            cidr_ip: 0.0.0.0/0
+        tags:
+          Environment: "{{ env }}"
+          Name: "{{ env }}-web-security-group"
+      register: web_security_group
+    
+    - name: Register web security group
+      set_fact:
+        web_security_group_ids: web_security_group
+
+    - name: Setup a target group for ELB
+      elb_target_group:
+        name: "{{ env }}-task-app-elb-tg"
+        protocol: http
+        target_type: ip
+        port: 5000
+        vpc_id: "{{ vpc_id }}"
+        state: present
+        tags:
+          Environment: "{{ env }}"
+          Name: "{{ env }}-task-app-elb-tg"
+      register: elb_tg
+
+    - name: configure ELB for app
+      elb_application_lb:
+        state: present
+        name: "{{ env }}-task-app-lb"
+        scheme: internet-facing
+        security_groups:
+          - "{{ web_security_group.group_id }}"
+        region: "{{ aws_region }}"
+        subnets: "{{ web_subnet_id_list }}"
+        listeners:
+          - Protocol: HTTP
+            Port: 5000
+            DefaultActions:
+              - Type: forward
+                TargetGroupName: "{{ env }}-task-app-elb-tg"
+        tags:
+          Environment: "{{ env }}"
+          Name: "{{ env }}-task-app-lb"
+      register: ecs_elb
+
+    - name: Output ecs_elb
+      debug:
+        msg: ecs_elb
+
+    - name: Create db migration task definition
+      ecs_taskdefinition:
+        family: "{{ env }}-task-app-db-migration-taskdef"
+        task_role_arn: "{{ ecs_role.arn }}"
+        execution_role_arn: "{{ ecs_role.arn }}"
+        containers:
+        - name: "{{ env }}-task-app-db-migration-container"
+          image: "{{ ecr_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ repository_name }}:{{ image_tag }}"
+          entryPoint: "{{ migration_cmd }}"
+          portMappings:
+          - containerPort: 5000
+            hostPort:      5000
+          environment:
+          - name: DB_USER
+            value: "postgres"
+          - name: DB_HOST
+            value: "{{ rds_instance_result.endpoint.address }}"
+          - name: DB_PORT
+            value: "5432"
+          secrets:
+          - name: DB_PASSWORD
+            valueFrom: "{{ db_pwd_secret_arn }}"
+
+          logConfiguration:
+            logDriver: awslogs
+            options:
+              awslogs-group: "{{ env }}-task-app-db-migration-logs-gp"
+              awslogs-region: "{{ aws_region }}"
+              awslogs-stream-prefix: "{{ env }}-task-app-db-migration-container"
+        launch_type: FARGATE
+        cpu: 1024
+        memory: 8GB
+        state: present
+        network_mode: awsvpc
+        region: "{{ aws_region }}"
+      register: db_migration_status
+
+    - name: Debug migration status result
+      debug:
+        msg: "{{ db_migration_status.taskdefinition.status }}"
+
+
+    - name: Create task definition
+      ecs_taskdefinition:
+        family: "{{ env }}-task-app-taskdef"
+        task_role_arn: "{{ ecs_role.arn }}"
+        execution_role_arn: "{{ ecs_role.arn }}"
+        containers:
+        - name: "{{ env }}-task-app-container"
+          image: "{{ ecr_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com/{{ repository_name }}:{{ image_tag }}"
+          entryPoint: "{{ entrypoint_cmd}}"
+          portMappings:
+          - containerPort: 5000
+            hostPort:      5000
+          environment:
+          - name: DB_USER
+            value: "postgres"
+          - name: DB_HOST
+            value: "{{ rds_instance_result.endpoint.address }}"
+          - name: DB_PORT
+            value: "5432"
+          secrets:
+          - name: DB_PASSWORD
+            valueFrom: "{{ db_pwd_secret_arn }}"
+
+          logConfiguration:
+            logDriver: awslogs
+            options:
+              awslogs-group: "{{ env }}-task-app-logs-gp"
+              awslogs-region: "{{ aws_region }}"
+              awslogs-stream-prefix: "{{ env }}-task-app-container"
+        launch_type: FARGATE
+        cpu: 1024
+        memory: 8GB
+        state: present
+        network_mode: awsvpc
+        region: "{{ aws_region }}"
+      when: db_migration_status.taskdefinition.status == "ACTIVE"
+
+    - name: Create an ECS service
+      ecs_service:
+        state: present
+        name: "{{ env }}-task-app-ecs-service"
+        cluster: "{{ env }}-task-app-cluster"
+        task_definition: "{{ env }}-task-app-taskdef"
+        launch_type: FARGATE
+        load_balancers:
+          - targetGroupArn: "{{ elb_tg.target_group_arn }}"
+            containerName: "{{ env }}-task-app-container"
+            containerPort: 5000
+        network_configuration:
+          assign_public_ip: yes
+          subnets: "{{ web_subnet_id_list }}"
+          security_groups:
+          - "{{ web_security_group.group_id }}"
+        desired_count: "{{ size_of_ecs_cluster }}"
+        region: "{{ aws_region }}"
+        deployment_configuration:
+          minimum_healthy_percent: 75
+          maximum_percent: 150
+        tags:
+          Environment: "{{ env }}"
+          Name: "{{ env }}-task-app-ecs-service"
+

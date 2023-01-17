@@ -1,0 +1,26 @@
+# VPC
+vpc_cidr: 10.2.0.0/16
+vpc_name: "Task app VPC"
+ 
+# Subnet
+subnet_name: "Task app Subnet"
+subnet_cidr: 10.10.0.0/26
+
+db_subnets:
+  - name: task_app_db_subnet_1
+    cidr: 10.2.1.0/24
+    az: eu-west-1a
+  - name: task_app_db_subnet_2
+    cidr: 10.2.2.0/24
+    az: eu-west-1b
+
+web_subnets:
+  - name: task_app_web_subnet_1
+    cidr: 10.2.3.0/24
+    az: eu-west-1a
+  - name: task_app_web_subnet_2
+    cidr: 10.2.4.0/24
+    az: eu-west-1b
+
+all_subnets: "{{ [db_subnets, web_subnets]|
+           community.general.lists_mergeby('name') }}"

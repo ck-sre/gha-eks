@@ -1,0 +1,34 @@
+---
+repository_name: prod/task-app-repo
+env: prod
+app_name: task-app
+image_tag: "1.1"
+aws_account_id: 847094746027
+aws_region: "eu-west-2"
+
+vpc_cidr: 10.6.0.0/16
+
+db_subnets:
+  - name: task_app_db_subnet_1
+    cidr: 10.6.1.0/24
+    az: eu-west-2a
+  - name: task_app_db_subnet_2
+    cidr: 10.6.2.0/24
+    az: eu-west-2b
+
+web_subnets:
+  - name: task_app_web_subnet_1
+    cidr: 10.6.3.0/24
+    az: eu-west-2a
+  - name: task_app_web_subnet_2
+    cidr: 10.6.4.0/24
+    az: eu-west-2b
+
+all_subnets: "{{ [db_subnets, web_subnets]|
+           community.general.lists_mergeby('name') }}"
+
+db_pwd_secret_name: prod-task-app-postgres-pwd
+db_pwd_secret_arn: arn:aws:secretsmanager:eu-west-2:847094746027:secret:prod-task-app-postgres-pwd-ggWYJ8 #Created from CLI
+
+migration_cmd: ["poetry", "run", "alembic", "upgrade", "head"]
+entrypoint_cmd: ["poetry", "run", "gunicorn", "fastapi_demo.asgi:app", "-b", "127.0.0.1:8000", "-k", "uvicorn.workers.UvicornWorker"]

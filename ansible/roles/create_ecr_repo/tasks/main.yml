@@ -1,0 +1,10 @@
+---
+
+- name: Log into ECR
+  shell: docker login -u AWS -p $(aws ecr get-login-password --region {{ aws_region }}) {{ aws_account_id }}.dkr.ecr.{{ aws_region }}.amazonaws.com
+
+- name: Create image repo
+  ecs_ecr:
+    name:  "{{ repository_name }}"
+    region:  "{{ aws_region }}"
+    state: present

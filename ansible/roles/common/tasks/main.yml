@@ -1,0 +1,10 @@
+---
+- name: Install pip, boto
+  pip:
+    name: "{{ item }}"
+  with_items: 
+    - docker
+    - boto3
+    - botocore
+    - requests
+    - unzip
