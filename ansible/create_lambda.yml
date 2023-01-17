@@ -1,3 +1,0 @@
----
-- import_playbook: build_docker_ecr.yml
-- import_playbook: create_lambda.yml
