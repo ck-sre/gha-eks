@@ -1,0 +1,85 @@
+---
+# tasks file for vpc
+
+- name: create a VPC
+  ec2_vpc_net:
+    name: "{{ env }}-task-app-vpc"
+    cidr_block: "{{ vpc_cidr }}"
+    region:  "{{ aws_region }}"
+    tags:
+      Environment: "{{ env }}"
+      Name: "{{ env }}-task-app-vpc"
+  register: ec2_vpc_net_result
+
+- name: VPC variable
+  set_fact:
+    vpc_id: "{{ ec2_vpc_net_result.vpc.id }}"
+  check_mode: no
+
+- name: create ec2 vpc internet gateway       
+  ec2_vpc_igw:
+    state: present
+    vpc_id: "{{ vpc_id }}"
+    region: "{{ aws_region }}"
+    tags:
+      Environment: "{{ env }}"
+      Name: "{{ env }}-task-app-igw"
+  register: igw_result
+
+- name: create web vpc subnets
+  ec2_vpc_subnet:
+    state: present
+    vpc_id: "{{ vpc_id }}"
+    region: "{{ aws_region }}"
+    az: "{{ item.az }}"      # az is the availability zone
+    cidr: "{{ item.cidr }}"
+    # enable public ip
+    map_public: yes
+    resource_tags:
+      Environment: "{{ env }}"
+      Name: "{{ item.name }}"
+  register: web_subnet_result
+  loop: "{{ web_subnets }}"
+
+
+- name: create DB vpc subnets
+  ec2_vpc_subnet:
+    state: present
+    vpc_id: "{{ vpc_id }}"
+    region: "{{ aws_region }}"
+    az: "{{ item.az }}"      # az is the availability zone
+    cidr: "{{ item.cidr }}"
+    # enable public ip
+    map_public: no
+    resource_tags:
+      Environment: "{{ env }}"
+      Name: "{{ item.name }}"
+  register: db_subnet_result
+  loop: "{{ db_subnets }}"
+
+- name: Set fact about DB subnets
+  set_fact:
+    db_subnet_id_list: "{{ db_subnet_result.results  | map(attribute='subnet.id') | list }}"
+
+- name: Set fact about Web subnets
+  set_fact:
+    web_subnet_id_list: "{{ web_subnet_result.results  | map(attribute='subnet.id') | list }}"
+
+- name: Set fact about vpc
+  set_fact: 
+    vpc_id: "{{ vpc_id }}"
+
+- name: create ec2 VPC public subnet route table
+    # create route table and connect subnet to routes
+  ec2_vpc_route_table:
+    state: present
+    vpc_id: "{{ vpc_id }}"
+    region: "{{ aws_region }}"
+    subnets: "{{ web_subnets | map(attribute='cidr') | list }}"
+    routes:
+      - dest: "0.0.0.0/0" 
+        gateway_id: "{{ igw_result.gateway_id }}"
+    tags:
+      Environment: "{{ env }}"
+      Name: "{{ env }}-task-app-route-table"
+  register: public_route_table

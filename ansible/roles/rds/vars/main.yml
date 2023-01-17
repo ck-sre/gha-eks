@@ -1,0 +1,9 @@
+---
+# vars file for rds
+
+allocated_storage: 50
+# azs: ["eu-west-1a", "eu-west-1b"]
+db_instance_class: "db.m5.large"
+storage_type: standard
+multi_az_bool: 0
+apply_immediately_bool: 1

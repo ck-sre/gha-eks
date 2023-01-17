@@ -1,0 +1,18 @@
+---
+- name: Build image.
+  docker_image:
+    build:
+      path: "{{ ecr_image_src_dir }}"
+      pull: true
+      args: "{{ ecr_image_buildargs | default(omit) }}"
+    name: "{{ ecr_image_name }}"
+    state: present
+    source: build
+    tag: "{{ ecr_image_tags.0 }}"
+
+- name: Tag and push the image.
+  include_tasks: tag-and-push.yml
+  loop: "{{ ecr_image_tags }}"
+  loop_control:
+    loop_var: outer_item
+  when: ecr_push

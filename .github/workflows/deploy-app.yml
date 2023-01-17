@@ -3,15 +3,20 @@ name: Build and Deploy
 on:
   push:
     branches:
-      - build-push
+      - scratch-deploy
+  pull_request:
+    branches:
+      - main
+  
 
 jobs:
   build-and-deploy:
+    environment: dev
     runs-on: ubuntu-latest
 
     steps:
     - name: Checkout code
-      uses: actions/checkout@v2
+      uses: actions/checkout@v3
 
     - name: Set up Python
       uses: actions/setup-python@v2
@@ -22,21 +27,21 @@ jobs:
       run: |
         python -m venv venv
         source venv/bin/activate
-        pip install setuptools wheel
+        pip install setuptools wheel docker boto3 botocore requests unzip
 
     - name: Configure AWS credentials
       uses: aws-actions/configure-aws-credentials@v1
       with:
         aws-access-key-id: ${{ secrets.AWS_ACCESS_KEY_ID }}
         aws-secret-access-key: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        aws-region: eu-west-1
+        aws-region: ${{ secrets.AWS_DEFAULT_REGION }}
 
     - name: Login to AWS ECR
       id: login-ecr
       uses: aws-actions/amazon-ecr-login@v1
       with:
-        region: eu-west-1
-    
+        region: ${{ secrets.AWS_DEFAULT_REGION }}
+
     - name: Run playbook for dev
       uses: dawidd6/action-ansible-playbook@v2
       with:
@@ -51,4 +56,22 @@ jobs:
       env:
         AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
         AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
-        AWS_DEFAULT_REGION: ${{ secrets.AWS_DEFAULT_REGION }}
+        AWS_DEFAULT_REGION: eu-west-1
+
+  
+    - name: Run playbook for prod
+      if: always()
+      uses: dawidd6/action-ansible-playbook@v2
+      with:
+        # Required, playbook filepath
+        playbook: site.yml
+        # Optional, directory where playbooks live
+        directory: ./ansible
+        # Optional, additional flags to pass to ansible-playbook
+        options: |
+          --inventory inventory/prod
+          --verbose
+      env:
+        AWS_ACCESS_KEY_ID: ${{ secrets.AWS_ACCESS_KEY_ID }}
+        AWS_SECRET_ACCESS_KEY: ${{ secrets.AWS_SECRET_ACCESS_KEY }}
+        AWS_DEFAULT_REGION: eu-west-2
