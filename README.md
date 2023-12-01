@@ -1,5 +1,7 @@
 ## Overview:
 
+This is a deployment of a sample application via AWS Fargate that utilizes Secretmanager
+
 ansible-playbook site.yml -i inventory/dev -vv
 
 Dockerfile in the repository root is used to containerize the application, called `task-app`.
